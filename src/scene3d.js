@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALL_FLYING, BALL_READY } from './game.js';
 import { clamp, easeInOutCubic, lerp } from './utils.js';
+import { createPlayer, setSegment } from './player3d.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const WORLD_WIDTH = 7.4;
@@ -23,8 +24,8 @@ export class Soccer3DRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#91adbc');
-    this.scene.fog = new THREE.Fog('#91adbc', 15, 35);
+    this.scene.background = makeSkyTexture();
+    this.scene.fog = new THREE.Fog('#c3d9de', 16, 36);
     this.camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.1, 60);
     this.camera.position.set(0, 3.05, 8.2);
     this.camera.lookAt(0, 1.02, -0.35);
@@ -165,13 +166,17 @@ export class Soccer3DRenderer {
       this.scene.add(step);
     }
 
-    const crowdGeo = new THREE.BoxGeometry(0.12, 0.24, 0.12);
-    const crowdMat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+    const crowdGeo = new THREE.BoxGeometry(0.13, 0.23, 0.13);
+    const crowdMat = new THREE.MeshStandardMaterial({ roughness: 0.88 });
+    const headGeo = new THREE.SphereGeometry(0.052, 10, 8);
+    const headMat = new THREE.MeshStandardMaterial({ roughness: 0.78 });
     const count = 480;
     const crowd = new THREE.InstancedMesh(crowdGeo, crowdMat, count);
+    const heads = new THREE.InstancedMesh(headGeo, headMat, count);
     const matrix = new THREE.Matrix4();
     const color = new THREE.Color();
-    const palette = ['#d7dce2', '#d66b55', '#537fa7', '#d4b85c', '#597d65', '#8c6c91'];
+    const palette = ['#d7dce2', '#d66b55', '#537fa7', '#d4b85c', '#597d65', '#8c6c91', '#e8e3d5'];
+    const skinTones = ['#e8b892', '#d9a074', '#c98a5f', '#f0c9a5', '#a9714d'];
     let seed = 41;
     const random = () => {
       seed = (seed * 16807) % 2147483647;
@@ -180,14 +185,22 @@ export class Soccer3DRenderer {
     for (let i = 0; i < count; i++) {
       const row = i % 4;
       const x = -8.4 + (i % 120) * 0.142 + (random() - 0.5) * 0.04;
-      const y = 0.7 + row * 0.52 + random() * 0.12;
+      const baseY = 0.475 + row * 0.5;
+      const bodyH = 0.5 + random() * 0.16;
+      const bodyY = baseY + 0.115 * bodyH;
       const z = -5.45 - row * 0.8;
-      matrix.makeTranslation(x, y, z);
+      matrix.makeScale(1, bodyH, 1);
+      matrix.setPosition(x, bodyY, z);
       crowd.setMatrixAt(i, matrix);
       color.set(palette[Math.floor(random() * palette.length)]);
       crowd.setColorAt(i, color);
+      const headY = baseY + 0.23 * bodyH + 0.04;
+      matrix.makeTranslation(x, headY, z);
+      heads.setMatrixAt(i, matrix);
+      color.set(skinTones[Math.floor(random() * skinTones.length)]);
+      heads.setColorAt(i, color);
     }
-    this.scene.add(crowd);
+    this.scene.add(crowd, heads);
 
     const boardMap = makeBoardTexture();
     const board = new THREE.Mesh(
@@ -270,140 +283,6 @@ export class Soccer3DRenderer {
   }
 }
 
-function createPlayer(scene, kit) {
-  const root = new THREE.Group();
-  scene.add(root);
-  const skin = new THREE.MeshStandardMaterial({ color: '#c98f6b', roughness: 0.72 });
-  const shirt = new THREE.MeshStandardMaterial({ color: kit.shirt, roughness: 0.78 });
-  const shorts = new THREE.MeshStandardMaterial({ color: kit.shorts, roughness: 0.82 });
-  const socks = new THREE.MeshStandardMaterial({ color: kit.socks, roughness: 0.76 });
-  const shoe = new THREE.MeshStandardMaterial({ color: '#e6e8e8', roughness: 0.48 });
-  const sole = new THREE.MeshStandardMaterial({ color: '#20262b', roughness: 0.72 });
-  const hair = new THREE.MeshStandardMaterial({ color: '#251d1a', roughness: 0.9 });
-  const eye = new THREE.MeshStandardMaterial({ color: '#171719', roughness: 0.45 });
-
-  const add = (geometry, material, position, scale) => {
-    const m = new THREE.Mesh(geometry, material);
-    if (position) m.position.set(...position);
-    if (scale) m.scale.set(...scale);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    root.add(m);
-    return m;
-  };
-  const ball = (r, material, position, scale) => add(new THREE.SphereGeometry(r, 18, 12), material, position, scale);
-  const segment = (radius, material) => add(new THREE.CylinderGeometry(radius * 0.88, radius, 1, 12), material);
-
-  const torso = add(new THREE.CapsuleGeometry(0.19, 0.28, 6, 16), shirt, [0, 1.17, 0], [0.9, 1, 1.22]);
-  const hips = add(new THREE.CapsuleGeometry(0.17, 0.12, 5, 14), shorts, [0, 0.88, 0], [0.95, 0.9, 1.2]);
-  add(new THREE.CylinderGeometry(0.065, 0.075, 0.13, 14), skin, [0, 1.46, 0]);
-  const head = new THREE.Group();
-  head.position.set(0, 1.62, 0);
-  root.add(head);
-  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.135, 24, 18), skin);
-  headMesh.scale.set(0.9, 1.12, 0.96);
-  headMesh.castShadow = true;
-  head.add(headMesh);
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.137, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.48), hair);
-  hairCap.scale.set(0.91, 1.12, 0.97);
-  hairCap.position.y = 0.006;
-  head.add(hairCap);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.027, 0.075, 12), skin);
-  nose.rotation.z = -Math.PI / 2;
-  nose.position.set(0.132, 0.008, 0.015);
-  head.add(nose);
-  const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), eye);
-  eyeMesh.position.set(0.088, 0.042, 0.111);
-  head.add(eyeMesh);
-  const ear = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), skin);
-  ear.scale.set(0.7, 1.1, 0.55);
-  ear.position.set(-0.012, 0, 0.13);
-  head.add(ear);
-
-  const limbs = {};
-  for (const side of ['L', 'R']) {
-    const z = side === 'L' ? 0.13 : -0.13;
-    limbs[side] = {
-      z,
-      thigh: segment(0.074, skin),
-      shortLeg: segment(0.091, shorts),
-      shin: segment(0.057, skin),
-      sock: segment(0.06, socks),
-      knee: ball(0.065, skin),
-      upperArm: segment(0.047, skin),
-      sleeve: segment(0.068, shirt),
-      foreArm: segment(0.042, skin),
-      elbow: ball(0.045, skin),
-      hand: ball(0.052, skin, null, [0.8, 1.15, 0.75]),
-      shoe: add(new THREE.CapsuleGeometry(0.055, 0.15, 5, 12), shoe),
-      sole: add(new THREE.BoxGeometry(0.23, 0.025, 0.12), sole),
-    };
-    limbs[side].shoe.rotation.z = Math.PI / 2;
-  }
-
-  const v = (x, y, z) => new THREE.Vector3(x, y, z);
-  const placeSegment = (mesh, a, b) => setSegment(mesh, a, b);
-  const update = (pose, game, now, dive = 0) => {
-    const ph = pose?.personHeight || 400;
-    const groundY = pose?.groundY || 650;
-    const ankleL = pose?.points?.[27];
-    const ankleR = pose?.points?.[28];
-    let liftL = clamp((groundY - (ankleL?.y ?? groundY)) / ph, 0, 0.4);
-    let liftR = clamp((groundY - (ankleR?.y ?? groundY)) / ph, 0, 0.4);
-    if (game.ball.state === BALL_FLYING && game.ball.flightTime < 0.42) {
-      const kick = Math.sin((game.ball.flightTime / 0.42) * Math.PI) * 0.24;
-      if (game.ball.lastKickFoot !== 'L') liftR = Math.max(liftR, kick);
-      else liftL = Math.max(liftL, kick);
-    }
-    const active = Math.max(liftL, liftR);
-    const lean = 0.12 + active * 0.9;
-    const bob = Math.sin(now / 420) * 0.006;
-    torso.position.set(lean * 0.12, 1.17 + bob, 0);
-    torso.rotation.z = -lean * 0.13;
-    hips.position.y = 0.88 + bob;
-    head.position.set(lean * 0.22, 1.62 + bob, 0);
-    root.rotation.z = dive * 0.65;
-
-    for (const side of ['L', 'R']) {
-      const part = limbs[side];
-      const lift = side === 'L' ? liftL : liftR;
-      const z = part.z;
-      const hip = v(0, 0.9 + bob, z);
-      const knee = v(lift * 1.05, 0.5 + lift * 0.35 + bob, z);
-      const ankle = v(lift * 2.15, 0.11 + lift * 1.15 + bob, z);
-      const shortEnd = hip.clone().lerp(knee, 0.52);
-      placeSegment(part.shortLeg, hip, shortEnd);
-      placeSegment(part.thigh, shortEnd, knee);
-      part.knee.position.copy(knee);
-      const sockStart = knee.clone().lerp(ankle, 0.46);
-      placeSegment(part.shin, knee, sockStart);
-      placeSegment(part.sock, sockStart, ankle);
-      part.shoe.position.set(ankle.x + 0.08, ankle.y - 0.045, z);
-      part.sole.position.set(ankle.x + 0.08, ankle.y - 0.092, z);
-
-      const sideSign = side === 'L' ? 1 : -1;
-      const shoulder = v(lean * 0.1, 1.36 + bob, z * 1.65);
-      const elbow = v(-active * 0.45 * sideSign + 0.025, 1.07 + active * 0.25 + bob, z * 1.72);
-      const wrist = v(-active * 0.65 * sideSign + 0.07, 0.82 + active * 0.45 + bob, z * 1.65);
-      const sleeveEnd = shoulder.clone().lerp(elbow, 0.42);
-      placeSegment(part.sleeve, shoulder, sleeveEnd);
-      placeSegment(part.upperArm, sleeveEnd, elbow);
-      placeSegment(part.foreArm, elbow, wrist);
-      part.elbow.position.copy(elbow);
-      part.hand.position.copy(wrist);
-    }
-  };
-  return { root, update };
-}
-
-function setSegment(mesh, a, b) {
-  const direction = b.clone().sub(a);
-  const length = Math.max(direction.length(), 0.001);
-  mesh.position.copy(a).add(b).multiplyScalar(0.5);
-  mesh.scale.set(1, length, 1);
-  mesh.quaternion.setFromUnitVectors(UP, direction.normalize());
-}
-
 function worldX(normalized) {
   return (normalized - 0.5) * WORLD_WIDTH;
 }
@@ -477,15 +356,52 @@ function makeBallTexture() {
 function makeBoardTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = 96;
+  canvas.height = 64;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#102f42';
-  ctx.fillRect(0, 0, 1024, 96);
-  ctx.fillStyle = '#e4edf0';
-  ctx.font = '700 34px sans-serif';
+  const grad = ctx.createLinearGradient(0, 0, 0, 64);
+  grad.addColorStop(0, '#12354b');
+  grad.addColorStop(1, '#0b2534');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 64);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+  for (let x = -64; x < 1024; x += 96) {
+    ctx.beginPath();
+    ctx.moveTo(x, 64);
+    ctx.lineTo(x + 46, 0);
+    ctx.lineTo(x + 66, 0);
+    ctx.lineTo(x + 20, 64);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = '#ffd34d';
+  ctx.fillRect(0, 0, 1024, 3);
+  ctx.fillRect(0, 61, 1024, 3);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('FAMILY CUP  ·  家庭足球场  ·  FAMILY CUP', 512, 50);
+  ctx.fillStyle = '#f2f6f5';
+  ctx.font = '800 26px "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillText('家 庭 足 球 场', 300, 33);
+  ctx.fillStyle = '#9fd4e4';
+  ctx.font = '700 19px "SF Pro Display", "Helvetica Neue", sans-serif';
+  ctx.fillText('F A M I L Y   C U P', 470, 34);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function makeSkyTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 8;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#5f9bc4');
+  grad.addColorStop(0.45, '#8cb8d2');
+  grad.addColorStop(0.78, '#c6dde3');
+  grad.addColorStop(1, '#e2ecec');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 8, 256);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;

@@ -442,14 +442,15 @@ button {
 
 /* ---------- countdown ---------- */
 #countdown {
-  background: rgba(4, 9, 16, 0.35);
+  background: rgba(4, 9, 16, 0.22);
   backdrop-filter: none;
   flex-direction: column;
   gap: 10px;
+  padding-bottom: 12vh;
 }
 
 .countdown-num {
-  font-size: clamp(120px, 22vw, 260px);
+  font-size: clamp(88px, 15vw, 190px);
   font-weight: 900;
   color: var(--accent);
   text-shadow: 0 12px 50px rgba(0, 0, 0, 0.6);

@@ -174,18 +174,21 @@ def test_avatar_kick(browser):
     page.goto(f"{BASE}/?demo=1")
     playing = wait_for(page, "window.__app && window.__app.state.mode === 'playing'", 25)
     check("avatar: demo reaches playing", bool(playing))
-    kicked = True
-    try:
-        page.wait_for_function(
-            """() => { const d = window.__app.state.demo;
+    kicked = page.evaluate(
+        """() => new Promise((resolve) => {
+            const d = window.__app.state.demo;
+            if (!d || !d.cycle) return resolve(false);
+            const deadline = performance.now() + 11000;
+            const tick = () => {
                 const ph = ((performance.now() - d.t0) / 1000) % d.cycle;
-                return ph >= 2.52 && ph <= 2.62; }""",
-            timeout=11000,
-            polling=16,
-        )
-    except Exception:
-        kicked = False
-    check("avatar: captures kick phase", kicked)
+                if (ph >= 2.55 && ph <= 2.85) return resolve(true);
+                if (performance.now() > deadline) return resolve(false);
+                requestAnimationFrame(tick);
+            };
+            tick();
+        })"""
+    )
+    check("avatar: captures kick phase", bool(kicked))
     shot(page, "07-avatar-kick.png")
     page.close()
 
